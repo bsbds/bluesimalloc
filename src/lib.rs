@@ -74,7 +74,7 @@ pub fn init_global_allocator(allocator: &BlueSimalloc) {
             0o600,
         );
         if shm_fd == -1 {
-            libc::exit(shm_fd);
+            panic!("failed to open shared memory");
         }
         assert!(shm_fd != -1, "shm_open failed");
 
