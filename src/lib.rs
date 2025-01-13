@@ -9,8 +9,13 @@ pub use ctor;
 
 const ORDER: usize = 32;
 const SHM_PATH: &str = "/bluesim1\0";
-const HEAP_BLOCK_SIZE: usize = 1024 * 1024 * 64;
-pub static mut HEAP_START_ADDR: usize = 0;
+const SHM_BLOCK_SIZE: usize = 1024 * 1024 * 256;
+pub static mut SHM_START_ADDR: usize = 0;
+
+/// Offset of the address space used by the allocator
+///
+/// Range SHM_START_ADDR..SHM_START_ADDR + HEAP_START_ADDR_OFFSET is reserved for mmap allocation
+const HEAP_START_ADDR_OFFSET: usize = 1024 * 1024 * 128;
 
 /// Handle to the allocator
 ///
@@ -66,6 +71,14 @@ macro_rules! setup_allocator {
     };
 }
 
+pub fn shm_start_addr() -> usize {
+    unsafe { SHM_START_ADDR }
+}
+
+pub fn heap_start_addr() -> usize {
+    unsafe { SHM_START_ADDR + HEAP_START_ADDR_OFFSET }
+}
+
 pub fn init_global_allocator(allocator: &BlueSimalloc) {
     unsafe {
         let shm_fd = libc::shm_open(
@@ -78,19 +91,18 @@ pub fn init_global_allocator(allocator: &BlueSimalloc) {
         }
         assert!(shm_fd != -1, "shm_open failed");
 
-        let heap = libc::mmap(
+        let shm = libc::mmap(
             0x7f7e8e600000 as *mut c_void,
-            HEAP_BLOCK_SIZE,
+            SHM_BLOCK_SIZE,
             libc::PROT_READ | libc::PROT_WRITE,
             libc::MAP_SHARED,
             shm_fd,
             0,
         );
 
-        let addr = heap as usize;
-        let size = HEAP_BLOCK_SIZE;
-        HEAP_START_ADDR = addr;
+        SHM_START_ADDR = shm as usize;
+        let heap_size = SHM_BLOCK_SIZE - HEAP_START_ADDR_OFFSET;
 
-        allocator.0.lock().init(addr, size);
+        allocator.0.lock().init(heap_start_addr(), heap_size);
     }
 }
