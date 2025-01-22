@@ -12,10 +12,22 @@ const SHM_PATH: &str = "/bluesim1\0";
 const SHM_BLOCK_SIZE: usize = 1024 * 1024 * 256;
 pub static mut SHM_START_ADDR: usize = 0;
 
+/// Memory Layout:
+/// ```text
+/// +----------------------+ SHM_START_ADDR + 256MB
+/// |      Heap Space      | (192MB - 256MB)
+/// +----------------------+ SHM_START_ADDR + 192MB
+/// |      Page Space      | (128MB - 192MB)
+/// +----------------------+ SHM_START_ADDR + 128MB
+/// |      Reserved        | (0MB - 128MB)
+/// +----------------------+ SHM_START_ADDR
+/// ```
 /// Offset of the address space used by the allocator
 ///
 /// Range SHM_START_ADDR..SHM_START_ADDR + HEAP_START_ADDR_OFFSET is reserved for mmap allocation
-const HEAP_START_ADDR_OFFSET: usize = 1024 * 1024 * 128;
+const HEAP_START_ADDR_OFFSET: usize = 1024 * 1024 * 192;
+/// Offset of the address space used by the page allocator
+const PAGE_START_ADDR_OFFSET: usize = 1024 * 1024 * 128;
 
 /// Handle to the allocator
 ///
@@ -73,6 +85,10 @@ macro_rules! setup_allocator {
 
 pub fn shm_start_addr() -> usize {
     unsafe { SHM_START_ADDR }
+}
+
+pub fn page_start_addr() -> usize {
+    unsafe { SHM_START_ADDR + PAGE_START_ADDR_OFFSET }
 }
 
 pub fn heap_start_addr() -> usize {
