@@ -8,9 +8,10 @@ use buddy_system_allocator::LockedHeap;
 pub use ctor;
 
 const ORDER: usize = 32;
-const SHM_PATH: &str = "/bluesim1\0";
+const SHM_PATHS: [&str; 2] = ["/bluesim1\0", "/bluesim2\0"];
 const SHM_BLOCK_SIZE: usize = 1024 * 1024 * 256;
-pub static mut SHM_START_ADDR: usize = 0;
+//pub static mut SHM_START_ADDR: usize = 0;
+const SHM_START_ADDR: usize = 0x7f7e8e600000;
 
 /// Memory Layout:
 /// ```text
@@ -70,7 +71,7 @@ unsafe impl GlobalAlloc for BlueSimalloc {
 
 #[macro_export]
 macro_rules! setup_allocator {
-    () => {
+    ($index:expr) => {
         use $crate::ctor;
 
         #[global_allocator]
@@ -78,27 +79,27 @@ macro_rules! setup_allocator {
 
         #[ctor::ctor]
         fn init_global_allocator() {
-            $crate::init_global_allocator(&HEAP_ALLOCATOR);
+            $crate::init_global_allocator($index, &HEAP_ALLOCATOR);
         }
     };
 }
 
 pub fn shm_start_addr() -> usize {
-    unsafe { SHM_START_ADDR }
+    SHM_START_ADDR
 }
 
 pub fn page_start_addr() -> usize {
-    unsafe { SHM_START_ADDR + PAGE_START_ADDR_OFFSET }
+    SHM_START_ADDR + PAGE_START_ADDR_OFFSET
 }
 
 pub fn heap_start_addr() -> usize {
-    unsafe { SHM_START_ADDR + HEAP_START_ADDR_OFFSET }
+    SHM_START_ADDR + HEAP_START_ADDR_OFFSET
 }
 
-pub fn init_global_allocator(allocator: &BlueSimalloc) {
+pub fn init_global_allocator(index: usize, allocator: &BlueSimalloc) {
     unsafe {
         let shm_fd = libc::shm_open(
-            SHM_PATH.as_ptr() as *const libc::c_char,
+            SHM_PATHS[index].as_ptr() as *const libc::c_char,
             libc::O_RDWR,
             0o600,
         );
@@ -116,7 +117,11 @@ pub fn init_global_allocator(allocator: &BlueSimalloc) {
             0,
         );
 
-        SHM_START_ADDR = shm as usize;
+        if shm.is_null() {
+            panic!("failed to open shared memory");
+        }
+
+        //SHM_START_ADDR = shm as usize;
         let heap_size = SHM_BLOCK_SIZE - HEAP_START_ADDR_OFFSET;
 
         allocator.0.lock().init(heap_start_addr(), heap_size);
